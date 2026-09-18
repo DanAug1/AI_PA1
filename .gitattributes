@@ -1,0 +1,8 @@
+# Store text files in the repository using LF line endings
+* text=auto eol=lf
+
+# Python files
+*.py text eol=lf
+
+# Text files
+*.txt text eol=lf
