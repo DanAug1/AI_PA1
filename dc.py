@@ -21,6 +21,42 @@ for line in gzip.open(dict_file, 'rt'):
     n = float(n)
     dictionary[word] = n
 
+scrabble_table = {
+
+    'a': 1,
+    'e': 1,
+    'i': 1,
+    'o': 1,
+    'u': 1,
+    'l': 1,
+    'n': 1,
+    's': 1,
+    't': 1,
+    'r': 1,
+
+    'd': 2,
+    'g': 2,
+
+    'b': 3,
+    'c': 3,
+    'm': 3,
+    'p': 3,
+
+    'f': 4,
+    'h': 4,
+    'v': 4,
+    'w': 4,
+    'y': 4,
+
+    'k': 5,
+
+    'j': 6,
+    'x': 6,
+
+    'q': 10,
+    'z': 10
+}
+
 
 
 class DC(search.Problem):
@@ -39,6 +75,10 @@ class DC(search.Problem):
             raise ValueError("Arg length for initial and goal must be 3 or 4 characters long")
         if (len(initial) != len(goal)):
             raise ValueError("Character lengths for initial and goal must be the same")
+        if  not initial.islower() or not goal.islower():
+            raise ValueError("Initial and Goal must be lowercase")
+        if initial not in dictionary or goal not in dictionary:
+            raise ValueError("Initial and Goal must be in the dictionary")
 
         self.initial = initial
         self.goal = goal
@@ -61,16 +101,14 @@ class DC(search.Problem):
 
         stateList = []
 
-
-        #is this supposed to only do one index instead of all possible changes?
         for i in range(len(state)):
             for letter in "abcdefghijklmnopqrstuvwxyz":
                 if letter == state[i]:
                     continue
 
-                newWord = state[:i] + letter + state[i+1:]
+                new_word = state[:i] + letter + state[i+1:]
 
-                if newWord in dictionary:
+                if new_word in dictionary:
                     stateList.append((i, letter))
 
         return stateList
@@ -84,7 +122,7 @@ class DC(search.Problem):
         #unpack the tuple from actions()
         index, letter = action
 
-        return state[:inex] + letter + state[index+1:]
+        return state[:index] + letter + state[index+1:]
 
 
 
@@ -108,14 +146,25 @@ class DC(search.Problem):
         the dc problem, you will have to check what
         cost metric (self.cost) is being used for this problem instance,
         i.e., is it steps, scrabble or frequency """
-        pass
+
+        if self.cost == "steps":
+            return self.steps_calculation(c, state1, action, state2)
+
+        elif self.cost == "scrabble":
+            return self.scrabble_calculation(c, state1, action, state2)
+
+        else:
+            return self.frequency_calculation(c, state1, action, state2)
 
 
 
     def __repr__(self):
         #TODO: complete this
         """" return a suitable string to represent this problem instance """
-        pass
+
+        return f"dc({self.initial},{self.goal},{self.cost})"
+
+
 
 
 
@@ -127,4 +176,91 @@ class DC(search.Problem):
         depend on the Problem's cost parameter, self.cost (i.e., steps, scrabble
         or frequency), as this will effect the estimate cost to get to
         the nearest goal. """
-        pass
+
+        if self.cost == "steps":
+            return self.h_steps_calculation(node)
+
+        if self.cost == "scrabble":
+            return self.h_scrabble_calculation(node)
+
+        if self.cost == "frequency":
+            return self.h_frequency_calculation(node)
+
+
+
+    def steps_calculation(self, c, state1, action, state2):
+
+        return c + 1
+
+
+
+    def scrabble_calculation(self, c, state1, action, state2):
+
+        # using '_' will let me unpack the tuple without caring about the index because python is cool
+        # and I don't need it for calculating cost
+        _, letter = action
+
+        action_cost = scrabble_table[letter]
+
+        return c + action_cost
+
+
+
+    # state2 is *not* the goal state, it is the next state provided in the sequence of nodes performed
+    # by search algorithms, so even though it is calculating the rarity of a given word, it is not immediately
+    # transforming the current state to the goal state. It calculates the rarity cost of the state2 arguments
+    # for each state transition that is being considered during the search
+    def frequency_calculation(self, c, state1, action, state2):
+
+        rarity_cost = dictionary[state2]
+
+        return c + 1 + rarity_cost
+
+
+
+    def h_steps_calculation(self, node):
+
+        h_cost = 0
+
+        for i in range(len(node.state)):
+            if node.state[i] != self.goal[i]:
+                h_cost += 1
+
+        return h_cost
+
+
+
+    def h_scrabble_calculation(self, node):
+        h_cost = 0
+
+        for i in range(len(node.state)):
+            if node.state[i] != self.goal[i]:
+                h_cost += scrabble_table[self.goal[i]]
+
+        return h_cost
+
+
+
+    # naive approach was to calculate the cost of each letter change corresponding to the cheapest word
+    # in the dictionary (if node.state[i] != self.goal[i], find the cheapest word that would bring
+    # node.state one step closer to goal. But the issue is that node.state[i+1] could have a cheaper path
+    # to self.goal than node.state[i], and thus we may not then accurately calculate a true lower bound.
+    # But since the rarity calculation is 1 + rarity, at minimum a change with frequency cost will always
+    # provide at least 1 cost. So using the same equation as steps_calculation provides a reasonable, if still
+    # naive approximation, to use as a heuristic. There is likely a margin of error here that could be accounted
+    # for, but I think without understanding how the rarity itself is calculated, I can't make an informed decision
+    # for a stronger heuristic.
+
+    # Change note: The dictionary has a minimum rarity value, I can use that as a sum with the minimum cost 1 and
+    # provide the sum as a scalar with the number of incorrect nodes. (abc) -> (efg) => 3 * (1 + MIN_RARITY)
+    def h_frequency_calculation(self, node):
+
+        MIN_RARITY = min(dictionary.values())
+
+        h_cost = 0
+
+        for i in range(len(node.state)):
+            if node.state[i] != self.goal[i]:
+                h_cost += 1
+
+        return h_cost * (1 + MIN_RARITY)

@@ -13,4 +13,3 @@ for w1, w2 in word_pairs:
     for cost in costs:
         dcsolver(w1, w2, cost)
     print()
-        
